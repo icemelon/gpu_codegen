@@ -1,0 +1,5 @@
+*.o
+*~
+
+example/*.asm
+example/test_maxas
