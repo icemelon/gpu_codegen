@@ -11,7 +11,10 @@ NVCCFLAGS=-O3 -std=c++11 -lineinfo -Xcompiler $(INCLUDE)
 LDFLAGS=-g -L. -L$(CUDA_PATH)/lib64
 LDLIBS=-lcuda -lcudart -lcublas
 
-all: test_maxas
+all: test_maxas gemm
+
+gemm: gemm.cu
+	$(NVCC) -O3 -arch sm_50 $(INCLUDE) -o $@ $< $(LDLIBS)
 
 test_maxas: test_maxas.o maxas_sgemm.cubin
 	$(CXX) $(LDFLAGS) -o $@ $< $(LDLIBS)
