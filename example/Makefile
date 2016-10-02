@@ -7,14 +7,14 @@ CUDA_PATH=/usr/local/cuda
 INCLUDE=-I. -I$(CUDA_PATH)/include
 
 CPPFLAGS=-O3 -g -std=c++11 $(INCLUDE) # -Wall -Werror
-NVCCFLAGS=-O3 -std=c++11 -lineinfo -Xcompiler $(INCLUDE)
+NVCCFLAGS=-O3 -arch sm_50 -std=c++11 -lineinfo -Xcompiler $(INCLUDE)
 LDFLAGS=-g -L. -L$(CUDA_PATH)/lib64
 LDLIBS=-lcuda -lcudart -lcublas
 
-all: test_maxas gemm
+all: test_maxas test_gemm
 
-gemm: gemm.cu
-	$(NVCC) -O3 -arch sm_50 $(INCLUDE) -o $@ $< $(LDLIBS)
+test_gemm: test_gemm.cpp gemm64_1.cubin
+	$(CXX) $(CPPFLAGS) -o $@ $< $(LDFLAGS) $(LDLIBS)
 
 test_maxas: test_maxas.o maxas_sgemm.cubin
 	$(CXX) $(LDFLAGS) -o $@ $< $(LDLIBS)
@@ -31,10 +31,14 @@ maxas_sgemm.cubin: maxas_sgemm.cu maxas_sgemm64.sass maxas_sgemm128.sass
 	$(MAXAS) -e -k sgemm_kernel_64 maxas_sgemm.cubin maxas_sgemm64-final.asm
 	$(MAXAS) -e -k sgemm_kernel_128 maxas_sgemm.cubin maxas_sgemm128-final.asm
 
+gemm64_1.cubin: gemm64_1.cu
+	$(NVCC) $(NVCCFLAGS) -cubin $<
+
 .PHONY: clean
 
 clean:
 	rm *~
 	rm *.o 
 	rm *.cubin
+	rm gemm
 	rm test_maxas
