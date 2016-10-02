@@ -2,41 +2,19 @@
 #
 # SharedSize: 8192
 # Params(8):
-#   0:0x140:8:0 param_C,
-#   1:0x148:4:0 param_m,
-#   2:0x14c:4:0 param_n,
-#   3:0x150:4:0 param_k,
-#   4:0x154:4:0 param_lda,
-#   5:0x158:4:0 param_ldb,
-#   6:0x15c:4:0 param_ldc
-#   7:0x160:4:0 param_alpha
-#   8:0x168:8:0 param_D // for diagnostic printf output
+#   0:0x140:4:4 param_C,
+#   1:0x144:4:0 param_m,
+#   2:0x148:4:0 param_n,
+#   3:0x14c:4:0 param_k,
+#   4:0x150:4:0 param_lda,
+#   5:0x154:4:0 param_ldb,
+#   6:0x158:4:0 param_ldc
+#   7:0x15c:4:0 param_alpha
+#   8:0x160:4:4 param_D // for diagnostic printf output
 #
 # Globals:
-#   c[0x0][0x174]: texA (the value is 1)
-#   c[0x0][0x170]: texB (the value is 0)
-
-<CONSTANT_MAPPING>
-    blockDimX : c[0x0][0x8]
-    blockDimY : c[0x0][0xc]
-    blockDimZ : c[0x0][0x10]
-    gridDimX : c[0x0][0x14]
-    gridDimY : c[0x0][0x18]
-    gridDimZ : c[0x0][0x1c]
-
-    param_C[0] : c[0x0][0x140]
-    param_C[1] : c[0x0][0x144]
-    param_m : c[0x0][0x148]
-    param_n : c[0x0][0x14c]
-    param_k : c[0x0][0x150]
-    param_lda : c[0x0][0x154]
-    param_ldb : c[0x0][0x158]
-    param_ldc : c[0x0][0x15c]
-    param_alpha : c[0x0][0x160]
-    param_D[0] : c[0x0][0x168]
-    param_D[1] : c[0x0][0x16c]
-
-</CONSTANT_MAPPING>
+#   c[0x0][0x164]: texA (the value is 1)
+#   c[0x0][0x168]: texB (the value is 0)
 
 <REGISTER_MAPPING>
 
@@ -63,8 +41,7 @@
 
     112-127 ~ track<0|2|4|6>[0], tex[1], readAs[2], readBs[3], writeS[2], end, ldx8, tid, bx, by, tid31, tid32
 
-    72-85   : Cy<00|10|04|14|08|18|12|112>, cy<00|04|08|12>
-    86-111  ~ ldc, ldc1, ldc4, ldc8, ldc28, writeCs, readCs, cx, ci, xmad_ci, alpha, xmadD, D, block_dim_x, grid_dim_x
+    72-111  ~ cy<00|04|08|12>, Cy<00|04|08|12>, ldc, ldc1, ldc4, ldc8, ldc28, writeCs, readCs, cx, ci, xmad_ci, alpha, xmadD, D, blckDimX, gridDimX
 
 </REGISTER_MAPPING>
 
@@ -79,8 +56,8 @@
 // tex = tid >= 32 ? texB : texA;
 01:-:-:-:1      ISETP.GE.AND P0, PT, tid, 32, PT; // Wait Dep 1
 06:-:-:-:1      SEL blk, by, bx, P0;              // Wait Dep 2 & 3
---:-:-:-:1 @!P0 MOV ldx4, param_lda;
---:-:-:-:1  @P0 MOV ldx4, param_ldb;
+--:-:-:-:1 @!P0 MOV ldx4, c[0x0][0x150];
+--:-:-:-:1  @P0 MOV ldx4, c[0x0][0x154];
 --:-:-:-:1 @!P0 MOV32I tex, 0x80000001; // texA
 --:-:-:-:1  @P0 MOV32I tex, 0x80000000; // texB
 
@@ -116,7 +93,7 @@
 --:-:-:-:1  @P0 IADD   writeS, writeS, 4x<8*64>;
 
 // int end = track0 + (k-8)*ldx;
---:-:-:-:1      MOV k, param_k;
+--:-:-:-:1      MOV k, c[0x0][0x14c];
 --:-:-:-:1      IADD k, k, -8;
 --:-:-:-:1      XMAD.LO end, k, ldx, track0, xmad_end;
 
@@ -280,22 +257,20 @@ LOOP:
 --:-:-:-:1      ISCADD  cy00, by, cy00, 6;
 
 // C += (cy*ldc + cx) * 4;
---:-:-:-:1      MOV ldc, param_ldc;
+--:-:-:-:1      MOV ldc, c[0x0][0x158];
 --:-:-:-:1      XMAD.LO ci, cy00, ldc, cx, xmad_ci;
---:-:-:-:1      SHL.W   ci, ci, 0x2;
---:-:-:-:1      IADD    Cy00.CC, ci, param_C[0];
---:-:-:-:1      IADD.X  Cy10, RZ, param_C[1];
+--:-:-:-:1      ISCADD  Cy00, ci, c[0x0][0x140], 2;
 
---:-:-:-:1      ISETP.LT.AND P5, PT, cx, param_m, PT; // cx +  0 < m
+--:-:-:-:1      ISETP.LT.AND P5, PT, cx, c[0x0][0x144], PT; // cx +  0 < m
 --:-:-:-:1      IADD cx, cx, 32;
---:-:-:-:1      ISETP.LT.AND P6, PT, cx, param_m, PT; // cx + 64 < m
+--:-:-:-:1      ISETP.LT.AND P6, PT, cx, c[0x0][0x144], PT; // cx + 64 < m
 
 // D += ((by * gridDimX * blockDimX * vars) + (bx * blockDimX * vars) + (tid * vars)) * 4
 // D += ((by * gridDimX + bx) * blockDimX + tid) * vars * 4
-//--:-:-:-:1      MOV grid_dim_x, gridDimX;
-//--:-:-:-:1      MOV block_dim_x, blockDimX;
-//--:-:-:-:1      XMAD.LO D, by, grid_dim_x, bx, xmadD;
-//--:-:-:-:1      XMAD.LO D, D, block_dim_x, tid, xmadD;
+//--:-:-:-:1      MOV gridDimX, c[0x0][0x14];
+//--:-:-:-:1      MOV blckDimX, c[0x0][0x8];
+//--:-:-:-:1      XMAD.LO D, by, gridDimX, bx, xmadD;
+//--:-:-:-:1      XMAD.LO D, D, blckDimX, tid, xmadD;
 //--:-:-:-:1      ISCADD D, D, c[0x0][0x160], 5; // 4 bytes * 8 vars = 32 or shift 5
 
 //--:-:-:-:1      STG.CS [D + 4x<0>], readAs;
@@ -317,7 +292,7 @@ LOOP:
 --:-:-:-:1      SHL  ldc8,  ldc, 5;
 --:-:-:-:1      ISCADD ldc28, ldc, -ldc4, 7;
 
---:-:-:-:1      MOV alpha, param_alpha;
+--:-:-:-:1      MOV alpha, c[0x0][0x15c];
 --:-:-:-:1      FMUL cs0, cx00y00, alpha;
 --:-:-:-:1      FMUL cs1, cx01y00, alpha;
 --:-:-:-:1      FMUL cs2, cx02y00, alpha;
@@ -330,9 +305,6 @@ LOOP:
 --:-:-:-:1      IADD Cy00, Cy00, -ldc1;
 --:-:-:-:1      IADD Cy04, Cy00, ldc4;
 --:-:-:-:1      IADD Cy08, Cy00, ldc8;
---:-:-:-:1      MOV  Cy14, Cy10;
---:-:-:-:1      MOV  Cy18, Cy10;
---:-:-:-:1      MOV  Cy112, Cy10;
 --:-:-:-:0      IADD Cy12, Cy04, ldc8; // Dual Issue (last instruction after reordering)
 
 </SCHEDULE_BLOCK>
@@ -400,25 +372,25 @@ STORE_C:
 --:-:-:-:1      IADD Cy08, Cy08, ldc1;
 --:-:-:-:1      IADD Cy12, Cy12, ldc1;
 
---:-:-:-:1      ISETP.LT.AND P0, PT, cy00, param_n, P5; // cy00 < n && cx +  0 < m
---:-:-:-:1      ISETP.LT.AND P1, PT, cy00, param_n, P6; // cy00 < n && cx + 32 < m
---:-:-:-:1      ISETP.LT.AND P2, PT, cy04, param_n, P5; // cy04 < n && cx +  0 < m
---:-:-:-:1      ISETP.LT.AND P3, PT, cy04, param_n, P6; // cy04 < n && cx + 32 < m
+--:-:-:-:1      ISETP.LT.AND P0, PT, cy00, c[0x0][0x148], P5; // cy00 < n && cx +  0 < m
+--:-:-:-:1      ISETP.LT.AND P1, PT, cy00, c[0x0][0x148], P6; // cy00 < n && cx + 32 < m
+--:-:-:-:1      ISETP.LT.AND P2, PT, cy04, c[0x0][0x148], P5; // cy04 < n && cx +  0 < m
+--:-:-:-:1      ISETP.LT.AND P3, PT, cy04, c[0x0][0x148], P6; // cy04 < n && cx + 32 < m
 
-01:-:-:-:1  @P0 STG.E [Cy00 + 4x<00>], cs0; // Wait Dep 1
---:-:-:-:1  @P1 STG.E [Cy00 + 4x<32>], cs1;
---:-:-:-:1  @P2 STG.E [Cy04 + 4x<00>], cs2;
---:-:-:-:1  @P3 STG.E [Cy04 + 4x<32>], cs3;
+01:-:-:-:1  @P0 STG.CG [Cy00 + 4x<00>], cs0; // Wait Dep 1
+--:-:-:-:1  @P1 STG.CG [Cy00 + 4x<32>], cs1;
+--:-:-:-:1  @P2 STG.CG [Cy04 + 4x<00>], cs2;
+--:-:-:-:1  @P3 STG.CG [Cy04 + 4x<32>], cs3;
 
---:-:-:-:1      ISETP.LT.AND P0, PT, cy08, param_n, P5; // cy08 < n && cx +  0 < m
---:-:-:-:1      ISETP.LT.AND P1, PT, cy08, param_n, P6; // cy08 < n && cx + 32 < m
---:-:-:-:1      ISETP.LT.AND P2, PT, cy12, param_n, P5; // cy12 < n && cx +  0 < m
---:-:-:-:1      ISETP.LT.AND P3, PT, cy12, param_n, P6; // cy12 < n && cx + 32 < m
+--:-:-:-:1      ISETP.LT.AND P0, PT, cy08, c[0x0][0x148], P5; // cy08 < n && cx +  0 < m
+--:-:-:-:1      ISETP.LT.AND P1, PT, cy08, c[0x0][0x148], P6; // cy08 < n && cx + 32 < m
+--:-:-:-:1      ISETP.LT.AND P2, PT, cy12, c[0x0][0x148], P5; // cy12 < n && cx +  0 < m
+--:-:-:-:1      ISETP.LT.AND P3, PT, cy12, c[0x0][0x148], P6; // cy12 < n && cx + 32 < m
 
---:-:-:-:1  @P0 STG.E [Cy08 + 4x<00>], cs4;
---:-:-:-:1  @P1 STG.E [Cy08 + 4x<32>], cs5;
---:-:-:-:1  @P2 STG.E [Cy12 + 4x<00>], cs6;
---:2:-:-:1  @P3 STG.E [Cy12 + 4x<32>], cs7; // Set Dep 2
+--:-:-:-:1  @P0 STG.CG [Cy08 + 4x<00>], cs4;
+--:-:-:-:1  @P1 STG.CG [Cy08 + 4x<32>], cs5;
+--:-:-:-:1  @P2 STG.CG [Cy12 + 4x<00>], cs6;
+--:2:-:-:1  @P3 STG.CG [Cy12 + 4x<32>], cs7; // Set Dep 2
 
 </SCHEDULE_BLOCK>
 

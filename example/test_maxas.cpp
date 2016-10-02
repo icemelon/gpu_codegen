@@ -81,8 +81,8 @@ int main(int argc, char* argv[]) {
 	ms = assemblySgemm("sgemm_kernel_64", sizeOther, devC, devA, devB, N, repeat, printVars);
 	gflops("Max64 ", N, ms, repeat);
 
-	ms = assemblySgemm("sgemm_kernel_128", sizeOther, devC, devA, devB, N, repeat, printVars);
-	gflops("Max128", N, ms, repeat);
+	/*ms = assemblySgemm("sgemm_kernel_128", sizeOther, devC, devA, devB, N, repeat, printVars);
+      gflops("Max128", N, ms, repeat);*/
 
 	//ms = cublasSgemm("maxwell_sgemm_128x64_nt", devT, devA, devB, N, hStart, hStop, repeat);
 	//gflops("Cub64 ", N, ms, repeat);
