@@ -100,9 +100,9 @@ __global__ void __launch_bounds__(64) gemm64_2(
   rA[0][1] = shareA[readAs + 0*16 + 8];
   rB[0][1] = shareB[readBs + 0*16 + 8];
   
-  //while (track0 < end) {
-  while (track0 <= end)
-  //for (int block_k = 0; block_k <= K - 8; block_k += 8)
+  //while (track0 < end)
+  //while (track0 <= end)
+  for (int block_k = 0; block_k <= K - 8; block_k += 8)
   {
     // inner loop
     // auto generated code

@@ -13,7 +13,7 @@ LDLIBS=-lcuda -lcudart -lcublas
 
 all: test_maxas test_gemm
 
-test_gemm: test_gemm.cpp gemm64_1.cubin
+test_gemm: test_gemm.cpp gemm64_1.cubin gemm64_2.cubin maxas_sgemm.cubin
 	$(CXX) $(CPPFLAGS) -o $@ $< $(LDFLAGS) $(LDLIBS)
 
 test_maxas: test_maxas.o maxas_sgemm.cubin
@@ -33,6 +33,11 @@ maxas_sgemm.cubin: maxas_sgemm.cu maxas_sgemm64.sass maxas_sgemm128.sass
 
 gemm64_1.cubin: gemm64_1.cu
 	$(NVCC) $(NVCCFLAGS) -cubin $<
+	$(MAXAS) -e gemm64_1.cubin gemm64_1.asm
+
+gemm64_2.cubin: gemm64_2.cu
+	$(NVCC) $(NVCCFLAGS) -cubin $<
+	$(MAXAS) -e gemm64_2.cubin gemm64_2.asm
 
 .PHONY: clean
 
@@ -40,5 +45,5 @@ clean:
 	rm *~
 	rm *.o 
 	rm *.cubin
-	rm gemm
+	rm test_gemm
 	rm test_maxas

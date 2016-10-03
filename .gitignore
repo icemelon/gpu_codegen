@@ -2,5 +2,6 @@
 *~
 
 example/*.asm
-example/gemm
+example/*.cubin
+example/test_gemm
 example/test_maxas
