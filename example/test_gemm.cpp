@@ -129,6 +129,9 @@ int main(int argc, const char **argv) {
   CUmodule hModule;
   CUtexref texA, texB;
   CUfunction hKernel;
+  cudaEvent_t hStart, hStop;
+  CUDA_CHECK( cudaEventCreate(&hStart, CU_EVENT_BLOCKING_SYNC) );
+  CUDA_CHECK( cudaEventCreate(&hStop, CU_EVENT_BLOCKING_SYNC) );
 
   cudaProfilerStart();
   if (!strcmp(kernel, "maxas")) {
@@ -144,25 +147,31 @@ int main(int argc, const char **argv) {
 	CUDA_CHECK( cuTexRefSetFormat(texB, CU_AD_FORMAT_FLOAT, 4) );
 	CUDA_CHECK( cuTexRefSetAddress(NULL, texA, (CUdeviceptr)devA, size) );
 	CUDA_CHECK( cuTexRefSetAddress(NULL, texB, (CUdeviceptr)devB, size) );
-    //float *devD;
-    //cudaMalloc((void**)devD, 4);
+    // Set up the params and dims
     void* params[] = {&devC, &N, &N, &N, &N, &N, &N, &alpha};
     int block_x, grid_x, grid_y;
     block_x = 64; 
-    grid_x = N / 64;
-    grid_y = N / 64;
+    grid_x = grid_y = (N + 63) / 64;
+    // Launch the kernel
+    CUDA_CHECK( cudaEventRecord(hStart, NULL) );
     CUDA_CHECK( cuLaunchKernel(hKernel, grid_x, grid_y, 1, block_x, 1, 1, 0, 0, params, 0) );
+    CUDA_CHECK( cudaEventRecord(hStop, NULL) );
+    CUDA_CHECK( cudaEventSynchronize(hStop) );
   } else if (!strcmp(kernel, "gemm64_1")) {
+    // Load the module and kernel function
     CUDA_CHECK( cuModuleLoad(&hModule, "gemm64_1.cubin") );
     CUDA_CHECK( cuModuleGetFunction(&hKernel, hModule, kernel) );
+    // Set up the params and dims
     void* params[] = {&N, &N, &N, &devA, &N, &devB, &N, &devC, &N, &alpha, &beta};
     int block_x, block_y, grid_x, grid_y;
-    block_x = 8; 
-    block_y = 8;
-    grid_x = N / 64;
-    grid_y = N / 64;
+    block_x = block_y = 8; 
+    grid_x = grid_y = (N + 63) / 64;
+    // Launch the kernel
+    CUDA_CHECK( cudaEventRecord(hStart, NULL) );
     CUDA_CHECK( cuLaunchKernel(hKernel, grid_x, grid_y, 1, block_x, block_y, 1, 0, 0, params, 0) );
     //gemm64_0<<<grid_size, block_size>>>(N, N, N, (float4*)devA, N, (float4*)devB, N, devC, N, 1.0, 0.0);
+    CUDA_CHECK( cudaEventRecord(hStop, NULL) );
+    CUDA_CHECK( cudaEventSynchronize(hStop) );
   } else if (!strcmp(kernel, "gemm64_2")) {
     // Load the module
     CUDA_CHECK( cuModuleLoad(&hModule, "gemm64_2.cubin") );
@@ -176,12 +185,45 @@ int main(int argc, const char **argv) {
 	CUDA_CHECK( cuTexRefSetFormat(texB, CU_AD_FORMAT_FLOAT, 4) );
 	CUDA_CHECK( cuTexRefSetAddress(NULL, texA, devA, size) );
 	CUDA_CHECK( cuTexRefSetAddress(NULL, texB, devB, size) );
+    // Set up the params and dims
     void* params[] = {&N, &N, &N, &N, &N, &devC, &N, &alpha, &beta};
     int block_x, grid_x, grid_y;
     block_x = 64; 
-    grid_x = (N + 63) / 64;
-    grid_y = (N + 63) / 64;
+    grid_x = grid_y = (N + 63) / 64;
+    CUDA_CHECK( cudaEventRecord(hStart, NULL) );
     CUDA_CHECK( cuLaunchKernel(hKernel, grid_x, grid_y, 1, block_x, 1, 1, 0, 0, params, 0) );
+    CUDA_CHECK( cudaEventRecord(hStop, NULL) );
+    CUDA_CHECK( cudaEventSynchronize(hStop) );
+    /*
+    dim3 block_size, grid_size;
+    block_size.x = 64;
+    grid_size.x = N / 64;
+    grid_size.y = N / 64;
+    CUDA_CHECK( cudaBindTexture(NULL, texA, devA, size) );
+    CUDA_CHECK( cudaBindTexture(NULL, texB, devB, size) );
+    gemm64_2<<<grid_size, block_size>>>(N, N, N, N, N, devC, N, 1.0, 0.0);*/
+  } else if (!strcmp(kernel, "gemm64_3")) {
+    // Load the module
+    CUDA_CHECK( cuModuleLoad(&hModule, "gemm64_3.cubin") );
+    // Load the kernel function
+    CUDA_CHECK( cuModuleGetFunction(&hKernel, hModule, "gemm64_3") );
+    // Load the textures
+    CUDA_CHECK( cuModuleGetTexRef(&texA, hModule, "texA") );
+	CUDA_CHECK( cuModuleGetTexRef(&texB, hModule, "texB") );
+    // Configure the textures
+    CUDA_CHECK( cuTexRefSetFormat(texA, CU_AD_FORMAT_FLOAT, 4) );
+	CUDA_CHECK( cuTexRefSetFormat(texB, CU_AD_FORMAT_FLOAT, 4) );
+	CUDA_CHECK( cuTexRefSetAddress(NULL, texA, devA, size) );
+	CUDA_CHECK( cuTexRefSetAddress(NULL, texB, devB, size) );
+    // Set up the params and dims
+    void* params[] = {&N, &N, &N, &N, &N, &devC, &N, &alpha, &beta};
+    int block_x, block_y, grid_x, grid_y;
+    block_x = block_y = 8; 
+    grid_x = grid_y = (N + 63) / 64;
+    CUDA_CHECK( cudaEventRecord(hStart, NULL) );
+    CUDA_CHECK( cuLaunchKernel(hKernel, grid_x, grid_y, 1, block_x, block_y, 1, 0, 0, params, 0) );
+    CUDA_CHECK( cudaEventRecord(hStop, NULL) );
+    CUDA_CHECK( cudaEventSynchronize(hStop) );
     /*
     dim3 block_size, grid_size;
     block_size.x = 64;
@@ -194,6 +236,10 @@ int main(int argc, const char **argv) {
     printf("Wrong kernel!\n");
     return 1;
   }
+
+  float ms;
+  CUDA_CHECK( cudaEventElapsedTime(&ms, hStart, hStop) );
+  printf("Kernel %s latency %f\n", kernel, ms);
 
   hostC = (float*)malloc(size);
   //CUDA_CHECK( cudaMemcpy(hostC, devC, size, cudaMemcpyDeviceToHost) );
